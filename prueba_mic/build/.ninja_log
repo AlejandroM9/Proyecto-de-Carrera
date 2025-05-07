@@ -1801,3 +1801,13 @@
 17981	18795	7680058766466210	C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_mic/build/.bin_timestamp	4b1ed6458d139c3
 18795	19044	0	esp-idf/esptool_py/CMakeFiles/app_check_size	59a53dfd800d46c6
 18795	19044	0	C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_mic/build/esp-idf/esptool_py/CMakeFiles/app_check_size	59a53dfd800d46c6
+350	775	7674356730539547	bootloader-prefix/src/bootloader-stamp/bootloader-build	c91a3ae83c622a10
+350	775	7674356730539547	bootloader/bootloader.elf	c91a3ae83c622a10
+350	775	7674356730539547	bootloader/bootloader.bin	c91a3ae83c622a10
+350	775	7674356730539547	bootloader/bootloader.map	c91a3ae83c622a10
+350	775	7674356730539547	C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_mic/build/bootloader-prefix/src/bootloader-stamp/bootloader-build	c91a3ae83c622a10
+350	775	7674356730539547	C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_mic/build/bootloader/bootloader.elf	c91a3ae83c622a10
+350	775	7674356730539547	C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_mic/build/bootloader/bootloader.bin	c91a3ae83c622a10
+350	775	7674356730539547	C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_mic/build/bootloader/bootloader.map	c91a3ae83c622a10
+86	108748	0	CMakeFiles/confserver	e39fa381137b3d6f
+86	108748	0	C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_mic/build/CMakeFiles/confserver	e39fa381137b3d6f

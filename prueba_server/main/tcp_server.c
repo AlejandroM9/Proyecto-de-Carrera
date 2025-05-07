@@ -23,43 +23,108 @@
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
 
+#include "esp_timer.h"
+#include <stdint.h>
+#include <inttypes.h>
+#include "esp_log.h"
+
 
 #define PORT                        CONFIG_EXAMPLE_PORT
 #define KEEPALIVE_IDLE              CONFIG_EXAMPLE_KEEPALIVE_IDLE
 #define KEEPALIVE_INTERVAL          CONFIG_EXAMPLE_KEEPALIVE_INTERVAL
 #define KEEPALIVE_COUNT             CONFIG_EXAMPLE_KEEPALIVE_COUNT
 
-static const char *TAG = "example";
+static const char *TAG = "Server_sound: ";
+static const char *DET_SOUND = "DET_SOUND";
+static const char *ON_LED = "ON_LED";
+static const char *OFF_LED = "OFF_LED";
+
+int ID_SENSOR;
+int timer, total_t, alert;
 
 static void do_retransmit(const int sock)
 {
     int len;
     char rx_buffer[128];
+    uint8_t buffer[sizeof(uint64_t) + sizeof(uint32_t) + sizeof(int)];
+    uint64_t prom;
+    uint64_t x;
+    uint32_t c;
+    int id;
 
     do {
-        len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-        if (len < 0) {
-            ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
-        } else if (len == 0) {
-            ESP_LOGW(TAG, "Connection closed");
-        } else {
-            rx_buffer[len] = 0; // Null-terminate whatever is received and treat it like a string
-            ESP_LOGI(TAG, "Received %d bytes: %s", len, rx_buffer);
 
-            // send() can return less bytes than supplied length.
-            // Walk-around for robust implementation.
-            int to_write = len;
-            while (to_write > 0) {
-                int written = send(sock, rx_buffer + (len - to_write), to_write, 0);
-                if (written < 0) {
-                    ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-                    // Failed to retransmit, giving up
-                    return;
+        int err = send(sock, DET_SOUND, strlen(DET_SOUND), 0);
+        if (err < 0) {
+            ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+            break;
+        }
+        else{
+            //Recibe buffer con las variables de mediciones
+            len = recv(sock, buffer, sizeof(buffer), 0);
+            if (len < 0) {
+                ESP_LOGE(TAG, "Error occurred during receiving: errno %d", errno);
+            } else if (len == 0) {
+                ESP_LOGW(TAG, "Connection closed");
+            } else {
+
+                //Se asigna a variables locales las variables enviadas desde el buffer
+                memcpy(&x, buffer, sizeof(x));
+                memcpy(&c, buffer + sizeof(x), sizeof(c));
+                memcpy(&id, buffer + sizeof(x) + sizeof(c), sizeof(id));
+
+                //ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu64, x);
+                //ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu32, c);
+
+                prom = x / c;   //Promedio de las mediciones tomadas en los ultimos 10s
+                ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu64, prom);
+                //El resultado es siempre de 0 a 100 
+
+                if(prom < 60){
+                    ESP_LOGI(TAG, "Se detectó sonido en los ultimos 10 segundos");
+                    ID_SENSOR = id;
+                    if(!timer)
+                        timer = esp_timer_get_time() / 1000000;
+                    
+                    int err2 = send(sock, ON_LED, strlen(ON_LED), 0);
+                    if (err2 < 0) {
+                        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                        break;
+                    }
                 }
-                to_write -= written;
+                else{
+                    ESP_LOGI(TAG, " NO se detectó sonido en los ultimos 10 segundos");
+                    if(timer){  //Solo se realiza el proceso si ya esta activo un timer (Si ya se ha detectado sonido)
+                        total_t = (esp_timer_get_time() / 1000000) - timer; //Se toma el tiempo total que se detectó el sonido
+                        timer = 0;
+                        ESP_LOGI(TAG, "Anteriormente se detectó mucho sonido continuo durante aproximadamente %d segundos", total_t);
+
+                        int err2 = send(sock, OFF_LED, strlen(OFF_LED), 0);
+                        if (err2 < 0) {
+                            ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+                            break;
+                        }
+
+                        /*
+                        PROCESO DE ENVIAR INFO DE LA MESA A LA BASE DE DATOS
+                        *****************************************************
+                        /
+                        /
+                        /
+                        /
+                        /
+                        *****************************************************
+                        */
+
+
+                    }
+                }
+                prom = 0;
             }
         }
-    } while (len > 0);
+
+        vTaskDelay(10000 / portTICK_PERIOD_MS);  //10s
+    } while (1);
 }
 
 static void tcp_server_task(void *pvParameters)
@@ -154,8 +219,8 @@ static void tcp_server_task(void *pvParameters)
 
         do_retransmit(sock);
 
-        shutdown(sock, 0);
-        close(sock);
+        //shutdown(sock, 0);
+        //close(sock);
     }
 
 CLEAN_UP:
