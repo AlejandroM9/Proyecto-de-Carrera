@@ -7,5 +7,6 @@
     ],
     "idf.portWin": "COM4",
     "idf.toolsPathWin": "C:\\Users\\alexm\\.espressif",
-    "idf.flashType": "UART"
+    "idf.flashType": "UART",
+    "C_Cpp.errorSquiggles": "disabled"
 }

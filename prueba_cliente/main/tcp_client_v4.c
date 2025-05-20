@@ -36,12 +36,14 @@
 #endif
 
 #define PORT CONFIG_EXAMPLE_PORT
+#define LIMIT_SOUND 60
 
 TaskHandle_t handle_sound, handle_send;
 SemaphoreHandle_t xMutex;
 
 uint32_t c = 0; //Contador
 uint64_t x = 0; //Acumulador
+uint64_t prom = 0;
 int sock;
 char host_ip[] = HOST_IP_ADDR;
 
@@ -70,8 +72,9 @@ static void send_task(void *pvParameters){
 
     //uint64_t prom;
     int id = 5;
+    int sound = 0;
     char rx_buffer[128];
-    uint8_t buffer[sizeof(uint64_t) + sizeof(uint32_t) + sizeof(int)];
+    uint8_t buffer[sizeof(int) + sizeof(int)];
     while(1){
 
         int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
@@ -91,16 +94,30 @@ static void send_task(void *pvParameters){
 
                 //ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu64, x);
                 //ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu32, c);
+                prom = x / c;
 
-                memcpy(buffer, &x, sizeof(x));
-                memcpy(buffer + sizeof(x), &c, sizeof(c));
-                memcpy(buffer + sizeof(x) + sizeof(c), &id, sizeof(id));
+                ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu64, prom);
+
+                if(prom < LIMIT_SOUND){
+                    sound = 1;
+                }
+                else
+                    sound = 0;
+
+                memcpy(buffer, &sound, sizeof(sound));
+                memcpy(buffer + sizeof(sound), &id, sizeof(id));
+                //memcpy(buffer + sizeof(x) + sizeof(c), &id, sizeof(id));
         
                 int err = send(sock, buffer, sizeof(buffer), 0);
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
                     break;
                 }
+
+                x = 0;
+                c = 0;
+                prom = 0;
+                sound = 0;
         
                 xSemaphoreGive(xMutex);
             }
