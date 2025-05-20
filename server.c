@@ -1,0 +1,188 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <pthread.h>
+#include <time.h>
+#include <inttypes.h>
+#include <stdint.h>
+#include <mysql/mysql.h>
+
+#define PORT 8250
+
+struct timespec start_t;
+int timer = 0;
+int id = 0;
+
+void conn_db(int id){
+	MYSQL *conn;
+	char *server	= "localhost";
+	char *user	= "alexm";
+	char *password	= "dimentio2019";
+	char *database	= "proyecto_db2";
+
+	conn = mysql_init(NULL);
+	if(conn == NULL){
+		fprintf(stderr, "mysql_init() da error\n");
+		return;
+	}
+
+	if(mysql_real_connect(conn, server, user, password, database, 0, NULL, 0) == NULL){
+		fprintf(stderr, "mysql_real_connect() da error\nError: %s\n", mysql_error(conn));
+		mysql_close(conn);
+		return;
+	}
+
+	char query[256];
+	snprintf(query, sizeof(query), "INSERT INTO mediciones(id) VALUES(%d)", id);
+
+	if(mysql_query(conn, query)){
+		fprintf(stderr, "INSERT fallido. Error: %s\n", mysql_error(conn));
+	}
+	else{
+		printf("INSERT exitoso\n");
+	}
+
+	mysql_close(conn);
+}
+
+void *server_task(void *arg) {
+	int listen_sock, client_sock;
+	struct sockaddr_in server_addr, client_addr;
+	socklen_t addr_len = sizeof(client_addr);
+	char rx_buffer[128];
+	int keepAlive = 1;
+	int keepIdle = 10;
+	int keepInterval = 5;
+	int keepCount = 3;
+
+	if((listen_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+		perror("Error al crear el socket");
+		pthread_exit(NULL);
+	}
+
+	int opt = 1;
+	if(setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0){
+		perror("Error en setsockopt");
+		close(listen_sock);
+		pthread_exit(NULL);
+	}
+	
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_addr.s_addr = INADDR_ANY;
+	server_addr.sin_port = htons(PORT);
+
+	if(bind(listen_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0){
+		perror("Error en bind");
+		close(listen_sock);
+		pthread_exit(NULL);
+	}
+
+	if(listen(listen_sock, 1) < 0){
+		perror("Error en listen");
+		close(listen_sock);
+		pthread_exit(NULL);
+	}
+
+	printf("Servidor escuchando en el puerto %d\n", PORT);
+
+	if((client_sock = accept(listen_sock, (struct sockaddr *)&client_addr, &addr_len)) < 0){
+		perror("Error al aceptar conexión");
+		close(listen_sock);
+		pthread_exit(NULL);
+	}
+	printf("Cliente conectado. \n");
+
+	//uint64_t x;
+	//uint32_t c;
+	int sensor_id, sound;
+	//uint64_t prom;
+	char command[] = "DET_SOUND";
+	uint8_t buffer[sizeof(int) + sizeof(int)];
+
+	while(1){
+		if(send(client_sock, command, strlen(command), 0) < 0){
+			perror("Error al enviar DET_SOUND");
+			break;
+		}
+
+		int len = recv(client_sock, buffer, sizeof(buffer), 0);
+		if(len < 0){
+			perror("Error al recibir datos");
+			break;
+		}
+		else if(len == 0){
+			printf("Conexión cerrada por el cliente\n");
+			break;
+		}
+		else{
+			memcpy(&sound, buffer, sizeof(sound));
+			memcpy(&sensor_id, buffer + sizeof(sound), sizeof(sensor_id));
+			//memcpy(&sensor_id, buffer + sizeof(x) + sizeof(c), sizeof(sensor_id));
+
+			//if(c == 0){
+			//	printf("No se han recibido mediciones.\n");
+			//}
+			//else{
+				//prom = x / c;
+				//printf("Promedio de sonido es: %" PRIu64 "\n", prom);
+				printf("Indicador de sonido recibido: %d\n", sound);
+
+				if(sound){
+					printf("Sonido detectado\n");
+					if(!timer){
+						clock_gettime(CLOCK_MONOTONIC, &start_t);
+						timer = 1;
+						id = sensor_id;
+						printf("Enviando comando ON_LED\n");
+						if(send(client_sock, "ON_LED", strlen("ON_LED"), 0) < 0){
+							perror("Error al enviar ON_LED");
+							break;
+						}
+					}
+				}
+				else{
+					printf("No se detecta sonido\n");
+					if(timer){
+						struct timespec end_t;
+						clock_gettime(CLOCK_MONOTONIC, &end_t);
+						double total_t = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_nsec - start_t.tv_nsec) / 1e9;
+						printf("Se detectó sonido continuo durante %.2f segundos.\n", total_t);
+						timer = 0;
+						printf("Enviando comando OFF_LED\n");
+						if(send(client_sock, "OFF_LED", strlen("OFF_LED"), 0) < 0){
+							perror("Error al enviar OFF_LED");
+							break;
+						}
+						conn_db(id);
+					}
+				}
+
+				//prom = 0;
+				//x = 0;
+				//c = 0;
+				sound = 0;
+				sensor_id = 0;
+			//}
+		}
+
+		sleep(10);
+	}
+	
+	close(client_sock);
+	close(listen_sock);
+	pthread_exit(NULL);
+}
+
+int main() {
+	pthread_t tid;
+	if(pthread_create(&tid, NULL, server_task, NULL) != 0){
+		perror("Error creando el hilo del servidor");
+		exit(EXIT_FAILURE);
+	}
+
+	pthread_join(tid, NULL);
+	return 0;
+}
