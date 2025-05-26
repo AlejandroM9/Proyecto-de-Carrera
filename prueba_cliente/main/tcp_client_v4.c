@@ -24,6 +24,7 @@
 #include "esp_mac.h"
 #include <sys/param.h>
 #include <math.h>
+#include "driver/uart.h"
 
 #if defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
 #include "addr_from_stdin.h"
@@ -36,10 +37,28 @@
 #endif
 
 #define PORT CONFIG_EXAMPLE_PORT
-#define LIMIT_SOUND 60
+#define UART0 UART_NUM_0
+//#define LIMIT_SOUND 60
 
-TaskHandle_t handle_sound, handle_send;
+TaskHandle_t handle_sound, handle_send, handle_info;
 SemaphoreHandle_t xMutex;
+
+/*
+    COSAS POR HACER
+
+        1.- Modificar base de datos "sensors_info" para que tengan las variables de abajo
+        2.- Hacer que las variables sean asignadas desde la base de datos al arraque del programa (ETAPA DE CONFIGURACION)
+        3.- Agregar un boton que al presionarse por 5 segundos se reinicie el esp (Para que se pueda cambiar la configuracion)
+
+*/
+
+
+int id;
+int salon_p;
+int limit_sound = 60;
+int piso = 1;
+char tipo[30] = "Publico";
+char area[30] = "Estudio";
 
 uint32_t c = 0; //Contador
 uint64_t x = 0; //Acumulador
@@ -49,6 +68,96 @@ char host_ip[] = HOST_IP_ADDR;
 
 static const char *TAG = "SENSOR";
 static const char *payload = "Message from ESP32 ";
+
+//Funcion para inicializar uart
+static void uart_init(void){
+    uart_config_t uart_config = {
+        .baud_rate = 115200,
+        .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+    };
+    ESP_ERROR_CHECK(uart_param_config(UART0, &uart_config));
+    ESP_ERROR_CHECK(uart_set_pin(UART0, 1, 3, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(uart_driver_install(UART0, 1024*2, 1024*2, 0, NULL, 0));
+}
+
+//Funcion para leer teclado por uart
+static int uart_gets(char *buf, int len){
+    int i = 0;
+    char ch;
+    while(i < (len - 1)){
+        int l = uart_read_bytes(UART0, (uint8_t *)&ch, 1, 20 / portTICK_PERIOD_MS);
+        if(l > 0){
+            if(ch == '\n' || ch == '\r'){
+                if(i == 0)
+                    continue;
+                
+                break;
+            }
+            buf[i++] = ch;
+        }
+    }
+    buf[i] = '\0';
+    return i;
+}
+
+//Funcion para la configuracion inicial del esp32/sensor
+void serial_config_init(void){
+    char buf[100];
+    const char *welcome = "\r\n***** BIENVENIDO A LA CONFIGURACION INICIAL DEL SENSOR *****\r\n";
+    const char *input_id = "Ingrese el numero id del sensor: ";
+    const char *input_limit = "Ingrese el limite de deteccion de sonido del sensor (1-99) : ";
+    const char *input_piso = "Ingrese el piso donde se encuentra el sensor (1, 2, 3 o 4): ";
+    const char *input_tipo = "Ingrese el tipo del sensor (publico/privado): ";
+    const char *input_area = "Ingrese el area de la biblioteca donde se encuentra el sensor: ";
+    const char *input_salon = "Ingrese el salon privado donde se encuentra el sensor: ";
+    
+    uart_write_bytes(UART0, welcome, strlen(welcome));
+    
+    //Solicita id
+    uart_write_bytes(UART0, input_id, strlen(input_id));
+    uart_gets(buf, sizeof(buf));
+    id = atoi(buf);
+
+    //Solicita threshold
+    uart_write_bytes(UART0, input_limit, strlen(input_limit));
+    uart_gets(buf, sizeof(buf));
+    limit_sound = atoi(buf);
+
+    //Solicita piso
+    uart_write_bytes(UART0, input_piso, strlen(input_piso));
+    uart_gets(buf, sizeof(buf));
+    piso = atoi(buf);
+
+    //Solicita tipo
+    uart_write_bytes(UART0, input_tipo, strlen(input_tipo));
+    uart_gets(buf, sizeof(buf));
+    strncpy(tipo, buf, sizeof(tipo) - 1);
+    tipo[sizeof(tipo) - 1] = '\0';
+
+    char msg[256];
+    
+    if(strcmp(tipo, "privado") == 0){
+        //Solicita salon
+        uart_write_bytes(UART0, input_salon, strlen(input_salon));
+        uart_gets(buf, sizeof(buf));
+        salon_p = atoi(buf);
+
+        snprintf(msg, sizeof(msg), "\r\nConfiguracion completada: id=%d, threshold=%d, piso=%d, tipo=%s, salon=%d\r\n", id, limit_sound, piso, tipo, salon_p);
+        uart_write_bytes(UART0, msg, strlen(msg));
+    }
+    else{
+        //Solicita area
+        uart_write_bytes(UART0, input_area, strlen(input_area));
+        uart_gets(buf, sizeof(buf));
+        strncpy(area, buf, sizeof(area) - 1);
+        area[sizeof(area) - 1] = '\0';
+
+        snprintf(msg, sizeof(msg), "\r\nConfiguracion completada: id=%d, threshold=%d, piso=%d, tipo=%s, area=%s\r\n", id, limit_sound, piso, tipo, area);
+        uart_write_bytes(UART0, msg, strlen(msg));
+    }
+}
 
 //Tarea encargada de almacenar las mediciones del sensor
 static void sound_task(void *pvParameters){
@@ -71,7 +180,6 @@ static void sound_task(void *pvParameters){
 static void send_task(void *pvParameters){
 
     //uint64_t prom;
-    int id = 5;
     int sound = 0;
     char rx_buffer[128];
     uint8_t buffer[sizeof(int) + sizeof(int)];
@@ -98,7 +206,7 @@ static void send_task(void *pvParameters){
 
                 ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu64, prom);
 
-                if(prom < LIMIT_SOUND){
+                if(prom < limit_sound){
                     sound = 1;
                 }
                 else
@@ -141,6 +249,9 @@ void tcp_client(void)
 
     gpio_reset_pin(2);
     gpio_set_direction(2, GPIO_MODE_OUTPUT);
+
+    uart_init();
+    serial_config_init();
     
     char rx_buffer[128];
     int addr_family = 0;
