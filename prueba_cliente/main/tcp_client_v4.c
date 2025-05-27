@@ -43,28 +43,33 @@
 TaskHandle_t handle_sound, handle_send, handle_info;
 SemaphoreHandle_t xMutex;
 
-/*
-    COSAS POR HACER
-
-        1.- Modificar base de datos "sensors_info" para que tengan las variables de abajo
-        2.- Hacer que las variables sean asignadas desde la base de datos al arraque del programa (ETAPA DE CONFIGURACION)
-        3.- Agregar un boton que al presionarse por 5 segundos se reinicie el esp (Para que se pueda cambiar la configuracion)
-
-*/
-
-
 int id;
 int salon_p;
 int limit_sound = 60;
 int piso = 1;
 char tipo[30] = "Publico";
 char area[30] = "Estudio";
+int flag_p = 0;
 
 uint32_t c = 0; //Contador
 uint64_t x = 0; //Acumulador
 uint64_t prom = 0;
 int sock;
 char host_ip[] = HOST_IP_ADDR;
+
+#pragma pack(push, 1)
+typedef struct {
+    int sound;
+    int id;
+    int piso;
+    int limit_sound;
+    int salon_p;
+    char tipo[30];
+    char area[30];
+    int flag_p;
+}sensor_packet_t;
+#pragma pack(pop)
+
 
 static const char *TAG = "SENSOR";
 static const char *payload = "Message from ESP32 ";
@@ -135,10 +140,11 @@ void serial_config_init(void){
     uart_gets(buf, sizeof(buf));
     strncpy(tipo, buf, sizeof(tipo) - 1);
     tipo[sizeof(tipo) - 1] = '\0';
-
+    //char t[30];
     char msg[256];
     
     if(strcmp(tipo, "privado") == 0){
+        flag_p = 1;
         //Solicita salon
         uart_write_bytes(UART0, input_salon, strlen(input_salon));
         uart_gets(buf, sizeof(buf));
@@ -148,6 +154,7 @@ void serial_config_init(void){
         uart_write_bytes(UART0, msg, strlen(msg));
     }
     else{
+        flag_p = 0;
         //Solicita area
         uart_write_bytes(UART0, input_area, strlen(input_area));
         uart_gets(buf, sizeof(buf));
@@ -182,6 +189,7 @@ static void send_task(void *pvParameters){
     //uint64_t prom;
     int sound = 0;
     char rx_buffer[128];
+    sensor_packet_t packet;
     uint8_t buffer[sizeof(int) + sizeof(int)];
     while(1){
 
@@ -212,11 +220,16 @@ static void send_task(void *pvParameters){
                 else
                     sound = 0;
 
-                memcpy(buffer, &sound, sizeof(sound));
-                memcpy(buffer + sizeof(sound), &id, sizeof(id));
-                //memcpy(buffer + sizeof(x) + sizeof(c), &id, sizeof(id));
+                packet.id = id;
+                packet.limit_sound = limit_sound;
+                packet.sound = sound;
+                packet.piso = piso;
+                strncpy(packet.tipo, tipo, sizeof(packet.tipo));
+                strncpy(packet.area, area, sizeof(packet.area));
+                packet.salon_p = salon_p;
+                packet.flag_p = flag_p;
         
-                int err = send(sock, buffer, sizeof(buffer), 0);
+                int err = send(sock, &packet, sizeof(packet), 0);
                 if (err < 0) {
                     ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
                     break;
