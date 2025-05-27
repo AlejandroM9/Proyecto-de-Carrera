@@ -14,9 +14,22 @@
 
 struct timespec start_t;
 int timer = 0;
-int id = 0;
+//int id = 0;
 
-void conn_db(int id){
+#pragma pack(push, 1)
+typedef struct {
+	int sound;
+	int id;
+	int piso;
+	int limit_sound;
+	int salon_p;
+	char tipo[30];
+	char area[30];
+	int flag_p;
+}sensor_packet_t;
+#pragma pack(pop)
+
+void conn_db(int id, int piso, int limit, int salon, char *tipo, char *area, int flag){
 	MYSQL *conn;
 	char *server	= "localhost";
 	char *user	= "alexm";
@@ -35,9 +48,13 @@ void conn_db(int id){
 		return;
 	}
 
-	char query[256];
-	snprintf(query, sizeof(query), "INSERT INTO mediciones(id) VALUES(%d)", id);
+	char query[350];
+	if(flag)
+		snprintf(query, sizeof(query), "INSERT INTO mediciones(id,piso,threshold_sound,tipo,salon) VALUES(%d,%d,%d,'%s',%d)", id,piso,limit,tipo,salon);
+	else
+		snprintf(query, sizeof(query), "INSERT INFO mediciones(id,piso,threshold_sound,tipo,area) VALUES(%d,%d,%d,'%s','%s')", id,piso,limit,tipo,area);
 
+	printf("QUERY: %s\n", query);
 	if(mysql_query(conn, query)){
 		fprintf(stderr, "INSERT fallido. Error: %s\n", mysql_error(conn));
 	}
@@ -100,7 +117,8 @@ void *server_task(void *arg) {
 	int sensor_id, sound;
 	//uint64_t prom;
 	char command[] = "DET_SOUND";
-	uint8_t buffer[sizeof(int) + sizeof(int)];
+	//uint8_t buffer[sizeof(int) + sizeof(int)];
+	sensor_packet_t packet;
 
 	while(1){
 		if(send(client_sock, command, strlen(command), 0) < 0){
@@ -108,7 +126,7 @@ void *server_task(void *arg) {
 			break;
 		}
 
-		int len = recv(client_sock, buffer, sizeof(buffer), 0);
+		int len = recv(client_sock, &packet, sizeof(sensor_packet_t), 0);
 		if(len < 0){
 			perror("Error al recibir datos");
 			break;
@@ -117,55 +135,45 @@ void *server_task(void *arg) {
 			printf("Conexión cerrada por el cliente\n");
 			break;
 		}
+		else if(len != sizeof(sensor_packet_t)){
+			printf("Paquete recibido de tamanio incorrecto (se recibieron %d bytes, se esperaban %lu bytes)\n", len, sizeof(sensor_packet_t));
+			break;
+		}
 		else{
-			memcpy(&sound, buffer, sizeof(sound));
-			memcpy(&sensor_id, buffer + sizeof(sound), sizeof(sensor_id));
-			//memcpy(&sensor_id, buffer + sizeof(x) + sizeof(c), sizeof(sensor_id));
-
-			//if(c == 0){
-			//	printf("No se han recibido mediciones.\n");
-			//}
-			//else{
-				//prom = x / c;
-				//printf("Promedio de sonido es: %" PRIu64 "\n", prom);
-				printf("Indicador de sonido recibido: %d\n", sound);
-
-				if(sound){
-					printf("Sonido detectado\n");
-					if(!timer){
-						clock_gettime(CLOCK_MONOTONIC, &start_t);
-						timer = 1;
-						id = sensor_id;
-						printf("Enviando comando ON_LED\n");
-						if(send(client_sock, "ON_LED", strlen("ON_LED"), 0) < 0){
-							perror("Error al enviar ON_LED");
-							break;
-						}
+			printf("Indicador de sonido recibido: %d\n", packet.sound);
+			printf("ID de sensor es: %d\n", packet.id);
+			printf("El threshold de sonido es: %d\n", packet.limit_sound);
+			printf("El piso del sensor es: %d\n", packet.piso);
+			printf("El tipo del sensor es: %s\n", packet.tipo);
+			if(packet.sound){
+				printf("Sonido detectado\n");
+				if(!timer){
+					clock_gettime(CLOCK_MONOTONIC, &start_t);
+					timer = 1;
+					//id = packet.id;
+					printf("Enviando comando ON_LED\n");
+					if(send(client_sock, "ON_LED", strlen("ON_LED"), 0) < 0){
+						perror("Error al enviar ON_LED");
+						break;
 					}
 				}
-				else{
-					printf("No se detecta sonido\n");
-					if(timer){
-						struct timespec end_t;
-						clock_gettime(CLOCK_MONOTONIC, &end_t);
-						double total_t = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_nsec - start_t.tv_nsec) / 1e9;
-						printf("Se detectó sonido continuo durante %.2f segundos.\n", total_t);
-						timer = 0;
-						printf("Enviando comando OFF_LED\n");
-						if(send(client_sock, "OFF_LED", strlen("OFF_LED"), 0) < 0){
-							perror("Error al enviar OFF_LED");
-							break;
-						}
-						conn_db(id);
+			}
+			else{
+				printf("No se detecta sonido\n");
+				if(timer){
+					struct timespec end_t;
+					clock_gettime(CLOCK_MONOTONIC, &end_t);
+					double total_t = (end_t.tv_sec - start_t.tv_sec) + (end_t.tv_nsec - start_t.tv_nsec) / 1e9;
+					printf("Se detectó sonido continuo durante %.2f segundos.\n", total_t);
+					timer = 0;
+					printf("Enviando comando OFF_LED\n");
+					if(send(client_sock, "OFF_LED", strlen("OFF_LED"), 0) < 0){
+						perror("Error al enviar OFF_LED");
+						break;
 					}
+					conn_db(packet.id,packet.piso,packet.limit_sound,packet.salon_p,packet.tipo,packet.area,packet.flag_p);
 				}
-
-				//prom = 0;
-				//x = 0;
-				//c = 0;
-				sound = 0;
-				sensor_id = 0;
-			//}
+			}
 		}
 
 		sleep(10);
