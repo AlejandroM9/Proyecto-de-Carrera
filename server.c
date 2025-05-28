@@ -26,6 +26,7 @@ typedef struct {
 	char tipo[30];
 	char area[30];
 	int flag_p;
+	//uint8_t mac;
 }sensor_packet_t;
 #pragma pack(pop)
 
@@ -121,10 +122,6 @@ void *server_task(void *arg) {
 	sensor_packet_t packet;
 
 	while(1){
-		if(send(client_sock, command, strlen(command), 0) < 0){
-			perror("Error al enviar DET_SOUND");
-			break;
-		}
 
 		int len = recv(client_sock, &packet, sizeof(sensor_packet_t), 0);
 		if(len < 0){
@@ -145,6 +142,7 @@ void *server_task(void *arg) {
 			printf("El threshold de sonido es: %d\n", packet.limit_sound);
 			printf("El piso del sensor es: %d\n", packet.piso);
 			printf("El tipo del sensor es: %s\n", packet.tipo);
+			printf("La direccion mac del sensor es: %d\n", packet.mac);
 			if(packet.sound){
 				printf("Sonido detectado\n");
 				if(!timer){
@@ -154,6 +152,12 @@ void *server_task(void *arg) {
 					printf("Enviando comando ON_LED\n");
 					if(send(client_sock, "ON_LED", strlen("ON_LED"), 0) < 0){
 						perror("Error al enviar ON_LED");
+						break;
+					}
+				}
+				else{
+					if(send(client_sock, "PASS", strlen("PASS"), 0) < 0){
+						perror("Error con enviado de comando generico");
 						break;
 					}
 				}
@@ -173,10 +177,16 @@ void *server_task(void *arg) {
 					}
 					conn_db(packet.id,packet.piso,packet.limit_sound,packet.salon_p,packet.tipo,packet.area,packet.flag_p);
 				}
+				else{
+					if(send(client_sock, "PASS", strlen("PASS"), 0) < 0){
+						perror("Error con enviado de comando generico");
+						break;
+					}
+				}
 			}
 		}
 
-		sleep(10);
+		sleep(2);	//Delay de 2s
 	}
 	
 	close(client_sock);
