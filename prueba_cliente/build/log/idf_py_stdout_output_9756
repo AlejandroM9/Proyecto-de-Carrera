@@ -9,7 +9,13 @@ Set EXAMPLE_WIFI_PASSWORD
 {"version": 2, "values": {"EXAMPLE_WIFI_PASSWORD": "12345678"}, "ranges": {}, "visible": {}}
 
 Set EXAMPLE_IPV4_ADDR
-{"version": 2, "values": {"EXAMPLE_IPV4_ADDR": "10.32.127.47"}, "ranges": {}, "visible": {}}
+{"version": 2, "values": {"EXAMPLE_IPV4_ADDR": "192.168.137.218"}, "ranges": {}, "visible": {}}
+
+{"version": 2, "values": {}, "ranges": {}, "visible": {}}
+
+{"version": 2, "values": {}, "ranges": {}, "visible": {}}
+
+{"version": 2, "values": {"EXAMPLE_PORT": 8250}, "ranges": {}, "visible": {}}
 
 {"version": 2, "values": {}, "ranges": {}, "visible": {}}
 

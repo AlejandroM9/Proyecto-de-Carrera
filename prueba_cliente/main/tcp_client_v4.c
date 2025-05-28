@@ -51,6 +51,8 @@ char tipo[30] = "Publico";
 char area[30] = "Estudio";
 int flag_p = 0;
 
+//uint8_t *mac;
+//int mac;
 uint32_t c = 0; //Contador
 uint64_t x = 0; //Acumulador
 uint64_t prom = 0;
@@ -67,6 +69,7 @@ typedef struct {
     char tipo[30];
     char area[30];
     int flag_p;
+    //int mac;
 }sensor_packet_t;
 #pragma pack(pop)
 
@@ -190,8 +193,43 @@ static void send_task(void *pvParameters){
     int sound = 0;
     char rx_buffer[128];
     sensor_packet_t packet;
-    uint8_t buffer[sizeof(int) + sizeof(int)];
+    //uint8_t buffer[sizeof(int) + sizeof(int)];
     while(1){
+
+        xSemaphoreTake(xMutex, portMAX_DELAY);
+        
+        prom = x / c;
+
+        ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu64, prom);
+
+        if(prom < limit_sound){
+            sound = 1;
+        }
+        else
+            sound = 0;
+
+        packet.id = id;
+        packet.limit_sound = limit_sound;
+        packet.sound = sound;
+        packet.piso = piso;
+        strncpy(packet.tipo, tipo, sizeof(packet.tipo));
+        strncpy(packet.area, area, sizeof(packet.area));
+        packet.salon_p = salon_p;
+        packet.flag_p = flag_p;
+        //packet.mac = mac;
+
+        x = 0;
+        c = 0;
+        prom = 0;
+        sound = 0;
+
+        xSemaphoreGive(xMutex);
+
+        int err = send(sock, &packet, sizeof(packet), 0);
+        if (err < 0) {
+            ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
+            break;
+        }
 
         int len = recv(sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
         // Error occurred during receiving
@@ -199,50 +237,12 @@ static void send_task(void *pvParameters){
             ESP_LOGE(TAG, "recv failed: errno %d", errno);
             break;
         }
-        // Data received
-        else {
+        else{
             rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string
             ESP_LOGI(TAG, "Received %d bytes from %s:", len, host_ip);
             ESP_LOGI(TAG, "%s", rx_buffer);
 
-            if(!strcmp(rx_buffer, "DET_SOUND")){    //Recibe comando para enviar mediciones de sonido al server
-                xSemaphoreTake(xMutex, portMAX_DELAY);
-
-                //ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu64, x);
-                //ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu32, c);
-                prom = x / c;
-
-                ESP_LOGI(TAG, "Promedio de sonido es: %" PRIu64, prom);
-
-                if(prom < limit_sound){
-                    sound = 1;
-                }
-                else
-                    sound = 0;
-
-                packet.id = id;
-                packet.limit_sound = limit_sound;
-                packet.sound = sound;
-                packet.piso = piso;
-                strncpy(packet.tipo, tipo, sizeof(packet.tipo));
-                strncpy(packet.area, area, sizeof(packet.area));
-                packet.salon_p = salon_p;
-                packet.flag_p = flag_p;
-        
-                int err = send(sock, &packet, sizeof(packet), 0);
-                if (err < 0) {
-                    ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
-                    break;
-                }
-
-                x = 0;
-                c = 0;
-                prom = 0;
-                sound = 0;
-        
-                xSemaphoreGive(xMutex);
-            }
-            else if(!strcmp(rx_buffer, "ON_LED")){  //Recibe comando para encender el LED
+            if(!strcmp(rx_buffer, "ON_LED")){  //Recibe comando para encender el LED
                 gpio_set_level(2, 1);
             }
             else if(!strcmp(rx_buffer, "OFF_LED")){ //Recibe comando para apagar el LED
@@ -250,7 +250,7 @@ static void send_task(void *pvParameters){
             }
         }
 
-        vTaskDelay(500 / portTICK_PERIOD_MS);  // Pausa de 500ms
+        vTaskDelay(10000 / portTICK_PERIOD_MS);  // Pausa de 10s
     }
 }
 
@@ -303,6 +303,9 @@ void tcp_client(void)
             break;
         }
         ESP_LOGI(TAG, "Successfully connected");
+
+        //esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        //esp_base_mac_addr_get()
 
         //AGREGAR MAIN DE prueba_mic AQUI
         xTaskCreate(sound_task, "mediciones", 8192, NULL, 10, &handle_sound);

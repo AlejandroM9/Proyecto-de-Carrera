@@ -1,5 +1,5 @@
+-- Existing sdkconfig 'C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_cliente/sdkconfig' renamed to 'C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_cliente/sdkconfig.old'.
 -- Found Git: C:/Users/alexm/.espressif/tools/idf-git/2.39.2/cmd/git.exe (found version "2.39.2.windows.1") 
--- ccache will be used for faster recompilation
 -- The C compiler identification is GNU 13.2.0
 -- The CXX compiler identification is GNU 13.2.0
 -- The ASM compiler identification is GNU
@@ -15,11 +15,9 @@
 -- Detecting CXX compile features
 -- Detecting CXX compile features - done
 -- Building ESP-IDF components for target esp32
-Dependencies lock doesn't exist, solving dependencies.
 NOTICE: Skipping optional dependency: esp_stubs
 Using component placed at C:\Users\alexm\OneDrive\Escritorio\S-Embebidos\v5.3\esp-idf\examples\common_components\protocol_examples_common for dependency "protocol_examples_common", specified in C:\Users\alexm\OneDrive\Escritorio\S-Embebidos\proyectos_E\blink\main\IOT\prueb_proyecto\prueba_cliente\main\idf_component.yml
-.NOTICE: Skipping optional dependency: esp_stubs
-NOTICE: Updating lock file at C:\Users\alexm\OneDrive\Escritorio\S-Embebidos\proyectos_E\blink\main\IOT\prueb_proyecto\prueba_cliente\dependencies.lock
+NOTICE: Skipping optional dependency: esp_stubs
 Processing 2 dependencies:
 [1/2] protocol_examples_common (*) (C:\Users\alexm\OneDrive\Escritorio\S-Embebidos\v5.3\esp-idf\examples\common_components\protocol_examples_common)
 [2/2] idf (5.3.0)
@@ -33,7 +31,7 @@ Loading defaults file C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E
 -- Found Threads: TRUE  
 -- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS
 -- Performing Test C_COMPILER_SUPPORTS_WFORMAT_SIGNEDNESS - Success
--- App "prueba_cliente" version: d4e0dd8-dirty
+-- App "prueba_cliente" version: a5babdb-dirty
 -- Adding linker script C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_cliente/build/esp-idf/esp_system/ld/memory.ld
 -- Adding linker script C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_cliente/build/esp-idf/esp_system/ld/sections.ld.in
 -- Adding linker script C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/v5.3/esp-idf/components/esp_rom/esp32/ld/esp32.rom.ld
