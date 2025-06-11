@@ -33,6 +33,9 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "freertos/event_groups.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+#include <stdbool.h>
 
 #if defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
 #include "addr_from_stdin.h"
@@ -44,10 +47,12 @@
 #define HOST_IP_ADDR ""
 #endif
 
-#define PORT CONFIG_EXAMPLE_PORT
+//#define PORT CONFIG_EXAMPLE_PORT
 #define UART0 UART_NUM_0
 #define WIFI_CONNECTED_BIT BIT0
 //#define LIMIT_SOUND 60
+
+#define NVS_NAMESPACE "storage"
 
 TaskHandle_t handle_sound, handle_send, handle_info;
 SemaphoreHandle_t xMutex;
@@ -63,6 +68,7 @@ int flag_r = 1;
 char wifi_ssid[33];
 char wifi_pass[33];
 char wifi_server[33];
+int wifi_port;
 
 uint8_t mac[6];
 //int mac;
@@ -70,7 +76,7 @@ uint32_t c = 0; //Contador
 uint64_t x = 0; //Acumulador
 uint64_t prom = 0;
 int sock;
-char host_ip[] = HOST_IP_ADDR;
+char host_ip[33]; //192.168.137.218
 
 //Estructura para almacenar datos de sensor y mediciones a enviar al server
 #pragma pack(push, 1)
@@ -107,6 +113,7 @@ static const char index_html[] = "<!DOCTYPE html>"
     "SSID: <input type=\"text\" name=\"ssid\"/><br/>"
     "Password: <input type=\"text\" name=\"pass\"/><br/>"
     "Servidor: <input type=\"text\" name=\"serv\"/><br/>"
+    "Port: <input type=\"text\" name=\"port\"/><br/>"
     "ID: <input type=\"text\" name=\"id\"/><br/>"
     "Limite de sonido: <input type=\"text\" name=\"limit_sound\"/><br/>"
     "Piso: <input type=\"text\" name=\"piso\"/><br/>"
@@ -120,6 +127,142 @@ static const char index_html[] = "<!DOCTYPE html>"
     "</body>"
     "</html>";
 
+
+void save_config(void){
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if(err != ESP_OK){
+        ESP_LOGE(TAG, "Error abriendo NVS (%s)", esp_err_to_name(err));
+        return;
+    }
+
+    err = nvs_set_i32(handle, "id", id);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando id");
+    err = nvs_set_i32(handle, "piso", piso);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando piso");
+    err = nvs_set_i32(handle, "limit", limit_sound);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando limit_sound");
+    err = nvs_set_i32(handle, "salon", salon_p);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando salon_p");
+    err = nvs_set_str(handle, "tipo", tipo);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando area");
+    err = nvs_set_str(handle, "area", area);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando area");
+    err = nvs_set_i32(handle, "flag", flag_p);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando flag_p");
+    err = nvs_set_str(handle, "ssid", wifi_ssid);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando wifi_ssid");
+    err = nvs_set_str(handle, "pass", wifi_pass);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando wifi_pass");
+    err = nvs_set_str(handle, "server", host_ip);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando wifi_server");
+    err = nvs_set_i32(handle, "port", wifi_port);
+    if(err != ESP_OK)
+        ESP_LOGE(TAG, "Error guardando wifi_port");
+    
+    err = nvs_commit(handle);
+    if(err != ESP_OK){
+        ESP_LOGE(TAG, "Error al hacer commit en NVS (%s)", esp_err_to_name(err));
+    }
+    nvs_close(handle);
+}
+
+bool load_config(void){
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
+
+    if(err != ESP_OK){
+        ESP_LOGE(TAG, "Error abriendo NVS (%s)", esp_err_to_name(err));
+        return false;
+    }
+
+    err = nvs_get_i32(handle, "id", &id);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    err = nvs_get_i32(handle, "piso", &piso);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    err = nvs_get_i32(handle, "limit", &limit_sound);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    err = nvs_get_i32(handle, "salon", &salon_p);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    size_t required_size = sizeof(tipo);
+    err = nvs_get_str(handle, "tipo", tipo, &required_size);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    required_size = sizeof(area);
+    err = nvs_get_str(handle, "area", area, &required_size);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    err = nvs_get_i32(handle, "flag", &flag_p);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    required_size = sizeof(wifi_ssid);
+    err = nvs_get_str(handle, "ssid", wifi_ssid, &required_size);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    required_size = sizeof(wifi_pass);
+    err = nvs_get_str(handle, "pass", wifi_pass, &required_size);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    required_size = sizeof(host_ip);
+    err = nvs_get_str(handle, "server", host_ip, &required_size);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+    err = nvs_get_i32(handle, "port", &wifi_port);
+    if(err == ESP_ERR_NVS_NOT_FOUND){
+        ESP_LOGE(TAG, "La clave no fue encontrada en NVS");
+        nvs_close(handle);
+        return false;
+    }
+
+    ESP_LOGI("TAG", "Configuracion actualizada: wifi_ssid=%s, wifi_pass=%s, wifi_server=%s, wifi_port=%d, id=%d, limit_sound=%d, piso=%d, tipo=%s, area=%s", wifi_ssid, wifi_pass, host_ip, wifi_port, id, limit_sound, piso, tipo, area);
+    
+    nvs_close(handle);
+    return true;
+}
 
 //handler de eventos de conexion a red
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void* event_data){
@@ -218,16 +361,17 @@ static esp_err_t post_config_handler(httpd_req_t *req){
     buf[ret] = '\0';
     ESP_LOGI("HTTP_POST", "Datos recibidos: %s", buf);
 
-    char str_id[10], str_limit[10], str_piso[10], str_tipo[20], str_area[30], str_ssid[10], str_pass[10], str_serv[10];
-    sscanf(buf, "ssid=%9[^&]&pass=%9[^&]&serv=%9[^&]&id=%9[^&]&limit_sound=%9[^&]&piso=%9[^&]&tipo=%19[^&]&area=%29s", str_ssid, str_pass, str_serv, str_id, str_limit, str_piso, str_tipo, str_area);
+    char str_id[10], str_limit[10], str_piso[10], str_tipo[20], str_area[30], str_ssid[10], str_pass[10], str_serv[30], str_port[10];
+    sscanf(buf, "ssid=%9[^&]&pass=%9[^&]&serv=%29[^&]&port=%9[^&]&id=%9[^&]&limit_sound=%9[^&]&piso=%9[^&]&tipo=%19[^&]&area=%29s", str_ssid, str_pass, str_serv, str_port, str_id, str_limit, str_piso, str_tipo, str_area);
 
     id = atoi(str_id);
     strncpy(wifi_ssid, str_ssid, sizeof(str_ssid) - 1);
     wifi_ssid[sizeof(wifi_ssid) - 1] = '\0';
     strncpy(wifi_pass, str_pass, sizeof(str_pass) - 1);
     wifi_pass[sizeof(wifi_pass) - 1] = '\0';
-    strncpy(wifi_server, str_serv, sizeof(str_serv) - 1);
-    wifi_server[sizeof(wifi_server) - 1] = '\0';
+    strncpy(host_ip, str_serv, sizeof(str_serv) - 1);
+    host_ip[sizeof(host_ip) - 1] = '\0';
+    wifi_port = atoi(str_port);
     limit_sound = atoi(str_limit);
     piso = atoi(str_piso);
     strncpy(tipo, str_tipo, sizeof(str_tipo) - 1);
@@ -242,8 +386,9 @@ static esp_err_t post_config_handler(httpd_req_t *req){
         flag_p = 0;
     }
     httpd_resp_send(req, "Configuracion recibida", HTTPD_RESP_USE_STRLEN);
-    ESP_LOGI("HTTP_POST", "Configuracion actualizada: wifi_ssid=%s, wifi_pass=%s, wifi_server=%s, id=%d, limit_sound=%d, piso=%d, tipo=%s, area=%s", wifi_ssid, wifi_pass, wifi_server, id, limit_sound, piso, tipo, area);
+    ESP_LOGI("HTTP_POST", "Configuracion actualizada: wifi_ssid=%s, wifi_pass=%s, wifi_server=%s, wifi_port=%d, id=%d, limit_sound=%d, piso=%d, tipo=%s, area=%s", wifi_ssid, wifi_pass, host_ip, wifi_port, id, limit_sound, piso, tipo, area);
     flag_r = 0;
+    save_config();
 
     return ESP_OK;
 }
@@ -336,13 +481,14 @@ static void sound_task(void *pvParameters){
     }
 }
 
-//Tarea encargada de recibir comandos del servidor
+//Tarea encargada de enviar comandos al servidor
 static void send_task(void *pvParameters){
 
     //uint64_t prom;
     int sound = 0;
     char rx_buffer[128], rx_buffer2[128];
-    sensor_packet_t packet;
+    int rx_buffer3[sizeof(int) + sizeof(int)];
+    sensor_packet_t packet, packet2;
     //uint8_t buffer[sizeof(int) + sizeof(int)];
     while(1){
 
@@ -358,6 +504,7 @@ static void send_task(void *pvParameters){
         else
             sound = 0;
 
+        memset(&packet, 0, sizeof(packet));
         packet.id = id;
         packet.limit_sound = limit_sound;
         packet.sound = sound;
@@ -410,15 +557,44 @@ static void send_task(void *pvParameters){
                 ESP_LOGI(TAG, "Received %d bytes from %s:", len2, host_ip);
                 ESP_LOGI(TAG, "%s", rx_buffer2);
 
+                //memset(&packet, 0, sizeof(packet));
+
                 if(!strcmp(rx_buffer2, "NACK")){
-                    int len3 = recv(sock, &packet, sizeof(sensor_packet_t), 0);
-                    if(len3 < 0){
-                        ESP_LOGE(TAG, "recv failed: errno %d", errno);
+                    ESP_LOGI(TAG, "Se recibio un NACK");
+                    int err2 = send(sock, "ACK", strlen("ACK"), 0);
+                    if (err2 < 0) {
+                        ESP_LOGE(TAG, "Error occurred during sending: errno %d", errno);
                         break;
                     }
-                    else if(len3 != sizeof(sensor_packet_t)){
-                        ESP_LOGE(TAG, "recv failed: Tamanio de paquete recibido erroneo ");
-                        break;
+                    else{
+
+                        int len3 = recv(sock, rx_buffer3, sizeof(rx_buffer3), 0);
+                        if(len3 < 0){
+                            ESP_LOGE(TAG, "recv failed: errno %d", errno);
+                            break;
+                        }
+                        else if(len3 == 0){
+                            ESP_LOGE(TAG, "Server cerro conexion");
+                            break;
+                        }
+                        else{
+                            ESP_LOGI(TAG, "Actualizando datos del sensor");
+                            //id = packet2.id;
+                            //limit_sound = packet2.limit_sound;
+                            memcpy(&id, rx_buffer3, sizeof(id));
+                            memcpy(&limit_sound, rx_buffer3 + sizeof(id), sizeof(limit_sound));
+                            ESP_LOGI(TAG, "NUEVO VALOR DE ID ES: %d", id);
+                            ESP_LOGI(TAG, "NUEVO VALOR DE LIMIT_SOUND ES: %d", limit_sound);
+                            save_config();
+                            //sound = packet.sound;
+                            //piso = packet.piso;
+                            //strncpy(tipo, packet.tipo, sizeof(tipo));
+                            //strncpy(area, packet.area, sizeof(area));
+                            //salon_p = packet.salon_p;
+                            //flag_p = packet.flag_p;
+                            //packet.mac = mac;
+                            //memcpy(packet.mac, mac, sizeof(packet.mac));
+                        }
                     }
                 }
             }
@@ -427,30 +603,33 @@ static void send_task(void *pvParameters){
         vTaskDelay(10000 / portTICK_PERIOD_MS);  // Pausa de 10s
     }
 }
+//192.168.137.218
+//Hacer que la opcion ssid se asigne al host_ip
+//Pedirle el port en la configuracion inicial
+//una vez que funcione todo: HACER LA PRESENTACION
+    //Fijarse en la estructura de la propuesta inicial en moodle
+    //Poner un diagrama de conexiones en la presentacion
 
 void tcp_client(void)
 {
-    //Entra a la pagina con http://192.168.4.1/
-    wifi_init_softap();
-    httpd_handle_t server = start_http_server();
-    //int f1 = 1;
-
-    while(flag_r){
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-        //f1 = 0;
-    }
-
-    if(server){
-        httpd_stop(server);
-    }
-
-    //Variables de prueba para ver si funciona el wifi_connect()
-    //wifi_ssid = "ALEX82";
+    if(load_config() == false){
     
-    //wifi_pass = "12345678";
+        //Entra a la pagina con http://192.168.4.1/
+        wifi_init_softap();
+        httpd_handle_t server = start_http_server();
+
+        while(flag_r){
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
+
+        if(server){
+            httpd_stop(server);
+        }
+    }
+
     int del = 1;
-    while(del <= 200){
-        ESP_LOGI(TAG_W, "Tiempo para conectar raspberry: %d / 200", del);
+    while(del <= 110){
+        ESP_LOGI(TAG_W, "Tiempo para conectar raspberry: %d / 110", del);
         del++;
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
@@ -484,7 +663,7 @@ void tcp_client(void)
             struct sockaddr_in dest_addr;
             inet_pton(AF_INET, host_ip, &dest_addr.sin_addr);
             dest_addr.sin_family = AF_INET;
-            dest_addr.sin_port = htons(PORT);
+            dest_addr.sin_port = htons(wifi_port);
             addr_family = AF_INET;
             ip_protocol = IPPROTO_IP;
 #elif defined(CONFIG_EXAMPLE_SOCKET_IP_INPUT_STDIN)
@@ -497,7 +676,7 @@ void tcp_client(void)
                 ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
                 break;
             }
-            ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, PORT);
+            ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, wifi_port);
 
             int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             if (err != 0) {
