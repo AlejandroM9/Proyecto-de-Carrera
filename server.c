@@ -74,12 +74,34 @@ sensor_packet_t backup1, backup2, backup3;
 //Funcion para ingresar datos de los clientes en la pagina web
 void backup_json(char *buffer, size_t buf_len){
 	pthread_mutex_lock(&mutex);
-	snprintf(buffer, buf_len, "{ \"backup1\": { \"id\": %d, \"limit_sound\": %d },"
-				" \"backup2\": { \"id\": %d, \"limit_sound\": %d },"
-				" \"backup3\": { \"id\": %d, \"limit_sound\": %d } }",
-				backup1.id, backup1.limit_sound,
-				backup2.id, backup2.limit_sound,
-				backup3.id, backup3.limit_sound);
+	snprintf(buffer, buf_len,
+		"{"
+			"\"backup1\":{"
+				"\"id\":%d,"
+				"\"limit_sound\":%d,"
+				"\"piso\":%d,"
+				"\"tipo\":\"%s\","
+				"\"area\":\"%s\""
+			"},"
+			"\"backup2\":{"
+				"\"id\":%d,"
+				"\"limit_sound\":%d,"
+				"\"piso\":%d,"
+				"\"tipo\":\"%s\","
+				"\"area\":\"%s\""
+			"},"
+			"\"backup3\":{"
+				"\"id\":%d,"
+				"\"limit_sound\":%d,"
+				"\"piso\":%d,"
+				"\"tipo\":\"%s\","
+				"\"area\":\"%s\""
+			"}"
+		"}",
+		backup1.id, backup1.limit_sound, backup1.piso, backup1.tipo, backup1.area,
+		backup2.id, backup2.limit_sound, backup2.piso, backup2.tipo, backup2.area,
+		backup3.id, backup3.limit_sound, backup3.piso, backup3.tipo, backup3.area);
+
 	pthread_mutex_unlock(&mutex);
 }
 
