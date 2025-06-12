@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "prueba_cliente",
-    "project_version":    "7a78bb0-dirty",
+    "project_version":    "ce79da3-dirty",
     "project_path":       "C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_cliente",
     "idf_path":           "C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/v5.3/esp-idf",
     "build_dir":          "C:/Users/alexm/OneDrive/Escritorio/S-Embebidos/proyectos_E/blink/main/IOT/prueb_proyecto/prueba_cliente/build",

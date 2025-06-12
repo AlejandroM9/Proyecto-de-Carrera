@@ -99,35 +99,102 @@ static const char *TAG = "SENSOR";
 static const char *TAG_W = "WIFI_AP";
 static const char *payload = "Message from ESP32 ";
 
-
-//AGREGAR SSID y PASSWORD.
-//SSID Y PASSWORD se almacenaran en las variables globales del cliente.
-
 //html para el formulario       ES DE PRUEBA
-static const char index_html[] = "<!DOCTYPE html>"
-    "<html>"
-    "<head><title>Configuracion del sensor</title></head>"
-    "<body>"
-    "<h1>Ingrese la configuracion del sensor</h1>"
-    "<form action=\"/config\" method=\"post\">"
-    "SSID: <input type=\"text\" name=\"ssid\"/><br/>"
-    "Password: <input type=\"text\" name=\"pass\"/><br/>"
-    "Servidor: <input type=\"text\" name=\"serv\"/><br/>"
-    "Port: <input type=\"text\" name=\"port\"/><br/>"
-    "ID: <input type=\"text\" name=\"id\"/><br/>"
-    "Limite de sonido: <input type=\"text\" name=\"limit_sound\"/><br/>"
-    "Piso: <input type=\"text\" name=\"piso\"/><br/>"
-    "Tipo: <select name=\"tipo\">"
-        "<option value=\"publico\">Publico</option>"
-        "<option value=\"privado\">Privado</option>"
-    "</select><br/>"
-    "Area/Salon: <input type=\"text\" name=\"area\"/><br/>"
-    "<input type=\"submit\" value=\"Enviar\"/>"
-    "</form>"
-    "</body>"
-    "</html>";
+static const char index_html[] = 
+"<!DOCTYPE html>\n"
+"<html lang=\"es\">\n"
+"<head>\n"
+"  <meta charset=\"UTF-8\">\n"
+"  <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n"
+"  <title>Configuración del sensor</title>\n"
+"\n"
+"  <style>\n"
+"  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#f4f6f9;margin:0;padding:0}\n"
+"  .container{max-width:480px;margin:auto;padding:24px}\n"
+"  .card{background:#fff;border-radius:8px;box-shadow:0 0.5rem 1rem rgba(0,0,0,.1);padding:24px;margin-bottom:24px}\n"
+"  h1{font-size:1.5rem;margin-top:0;text-align:center}\n"
+"  label{display:block;font-weight:600;margin-bottom:4px}\n"
+"  input,select{width:100%;padding:8px 10px;margin-bottom:12px;border:1px solid #ccc;border-radius:4px;font-size:1rem}\n"
+"  button{display:block;width:100%;padding:10px 0;background:#198754;color:#fff;border:none;border-radius:4px;font-size:1rem;cursor:pointer}\n"
+"  button:active{transform:scale(.98)}\n"
+"  .alert{padding:10px 14px;margin-bottom:12px;border-radius:4px}\n"
+"  .alert.ok{background:#d1e7dd;color:#0f5132}\n"
+"  .alert.err{background:#f8d7da;color:#842029}\n"
+"  </style>\n"
+"\n"
+"  <script>\n"
+"  function validar(e){\n"
+"    e.preventDefault();\n"
+"    const f=e.target;\n"
+"    for(const el of f.querySelectorAll('[required]')){\n"
+"      if(!el.value.trim()){mensaje('Rellena todos los campos',false);return;}\n"
+"    }\n"
+"    const body=`ssid=${encodeURIComponent(f.ssid.value)}&`\n"
+"              +`pass=${encodeURIComponent(f.pass.value)}&`\n"
+"              +`serv=${encodeURIComponent(f.serv.value)}&`\n"
+"              +`port=${encodeURIComponent(f.port.value)}&`\n"
+"              +`id=${encodeURIComponent(f.id.value)}&`\n"
+"              +`limit_sound=${encodeURIComponent(f.limit_sound.value)}&`\n"
+"              +`piso=${encodeURIComponent(f.piso.value)}&`\n"
+"              +`tipo=${encodeURIComponent(f.tipo.value)}&`\n"
+"              +`area=${encodeURIComponent(f.area.value)}`;\n"
+"    fetch('/config',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body})\n"
+"      .then(r=>r.text())\n"
+"      .then(t=>{mensaje(t,true);setTimeout(()=>location.reload(),800);})\n"
+"      .catch(()=>mensaje('Error al enviar',false));\n"
+"  }\n"
+"  function mensaje(txt,ok){\n"
+"    const d=document.getElementById('msg');\n"
+"    d.textContent=txt;\n"
+"    d.className='alert '+(ok?'ok':'err');\n"
+"  }\n"
+"  </script>\n"
+"</head>\n"
+"<body>\n"
+"<div class=\"container\">\n"
+"  <div class=\"card\">\n"
+"    <h1>Configuración del sensor</h1>\n"
+"    <form onsubmit=\"validar(event)\">\n"
+"      <label>SSID Wi-Fi</label>\n"
+"      <input name=\"ssid\" required>\n"
+"\n"
+"      <label>Password Wi-Fi</label>\n"
+"      <input name=\"pass\" type=\"password\" required>\n"
+"\n"
+"      <label>IP / Host del servidor</label>\n"
+"      <input name=\"serv\" required>\n"
+"\n"
+"      <label>Puerto</label>\n"
+"      <input name=\"port\" type=\"number\" min=\"1\" max=\"65535\" required>\n"
+"\n"
+"      <label>ID del sensor</label>\n"
+"      <input name=\"id\" type=\"number\" min=\"0\" required>\n"
+"\n"
+"      <label>Límite de sonido</label>\n"
+"      <input name=\"limit_sound\" type=\"number\" min=\"0\" required>\n"
+"\n"
+"      <label>Piso</label>\n"
+"      <input name=\"piso\" type=\"number\" min=\"0\" required>\n"
+"\n"
+"      <label>Tipo</label>\n"
+"      <select name=\"tipo\" required>\n"
+"        <option value=\"publico\">Público</option>\n"
+"        <option value=\"privado\">Privado</option>\n"
+"      </select>\n"
+"\n"
+"      <label>Área / Salón</label>\n"
+"      <input name=\"area\" required>\n"
+"\n"
+"      <button>Guardar y reiniciar Wi-Fi</button>\n"
+"    </form>\n"
+"    <div id=\"msg\"></div>\n"
+"  </div>\n"
+"</div>\n"
+"</body>\n"
+"</html>\n";
 
 
+//Funcion para almacenar configuracion inicial en la memoria flash
 void save_config(void){
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
@@ -177,6 +244,7 @@ void save_config(void){
     nvs_close(handle);
 }
 
+//Funcion para recuperar la configuracion inicial de la memoria flash
 bool load_config(void){
     nvs_handle_t handle;
     esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
@@ -296,24 +364,15 @@ esp_err_t wifi_connect(void){
         ESP_LOGE(TAG_W, "No se ha configurado la SSID");
         return ESP_FAIL;
     }
-    //ESP_LOGI(TAG_W, "xd1");
     
     if(wifi_event_group == NULL){
         wifi_event_group = xEventGroupCreate();
     }
-    //ESP_LOGI(TAG_W, "xd2");
-
-    //ESP_ERROR_CHECK(esp_netif_init());
-    //ESP_LOGI(TAG_W, "xd3");
-    //ESP_ERROR_CHECK(esp_event_loop_create_default());
-    //ESP_LOGI(TAG_W, "xd4");
     
     esp_netif_create_default_wifi_sta();
-    //ESP_LOGI(TAG_W, "xd5");
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    //ESP_LOGI(TAG_W, "xd6");
 
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL));
@@ -322,11 +381,9 @@ esp_err_t wifi_connect(void){
     strncpy((char *)wifi_cfg.sta.ssid, wifi_ssid, sizeof(wifi_cfg.sta.ssid) - 1);
     strncpy((char *)wifi_cfg.sta.password, wifi_pass, sizeof(wifi_cfg.sta.password) - 1);
     wifi_cfg.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-    //ESP_LOGI(TAG_W, "xd7");
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
-    //ESP_LOGI(TAG_W, "xd8");
 
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_LOGI(TAG_W, "Intentando conectar con la red: %s", wifi_ssid);
@@ -483,13 +540,10 @@ static void sound_task(void *pvParameters){
 
 //Tarea encargada de enviar comandos al servidor
 static void send_task(void *pvParameters){
-
-    //uint64_t prom;
     int sound = 0;
     char rx_buffer[128], rx_buffer2[128];
     int rx_buffer3[sizeof(int) + sizeof(int)];
     sensor_packet_t packet, packet2;
-    //uint8_t buffer[sizeof(int) + sizeof(int)];
     while(1){
 
         xSemaphoreTake(xMutex, portMAX_DELAY);
@@ -557,8 +611,6 @@ static void send_task(void *pvParameters){
                 ESP_LOGI(TAG, "Received %d bytes from %s:", len2, host_ip);
                 ESP_LOGI(TAG, "%s", rx_buffer2);
 
-                //memset(&packet, 0, sizeof(packet));
-
                 if(!strcmp(rx_buffer2, "NACK")){
                     ESP_LOGI(TAG, "Se recibio un NACK");
                     int err2 = send(sock, "ACK", strlen("ACK"), 0);
@@ -579,21 +631,11 @@ static void send_task(void *pvParameters){
                         }
                         else{
                             ESP_LOGI(TAG, "Actualizando datos del sensor");
-                            //id = packet2.id;
-                            //limit_sound = packet2.limit_sound;
                             memcpy(&id, rx_buffer3, sizeof(id));
                             memcpy(&limit_sound, rx_buffer3 + sizeof(id), sizeof(limit_sound));
                             ESP_LOGI(TAG, "NUEVO VALOR DE ID ES: %d", id);
                             ESP_LOGI(TAG, "NUEVO VALOR DE LIMIT_SOUND ES: %d", limit_sound);
                             save_config();
-                            //sound = packet.sound;
-                            //piso = packet.piso;
-                            //strncpy(tipo, packet.tipo, sizeof(tipo));
-                            //strncpy(area, packet.area, sizeof(area));
-                            //salon_p = packet.salon_p;
-                            //flag_p = packet.flag_p;
-                            //packet.mac = mac;
-                            //memcpy(packet.mac, mac, sizeof(packet.mac));
                         }
                     }
                 }
@@ -603,16 +645,14 @@ static void send_task(void *pvParameters){
         vTaskDelay(10000 / portTICK_PERIOD_MS);  // Pausa de 10s
     }
 }
-//192.168.137.218
-//Hacer que la opcion ssid se asigne al host_ip
-//Pedirle el port en la configuracion inicial
+// http://192.168.137.218:8000
 //una vez que funcione todo: HACER LA PRESENTACION
     //Fijarse en la estructura de la propuesta inicial en moodle
     //Poner un diagrama de conexiones en la presentacion
 
 void tcp_client(void)
 {
-    if(load_config() == false){
+    if(load_config() == false){//Si no se encuentra configuracion inicial en memoria flash, se configura esp como AP y entramos a la pagina para ingresar datos
     
         //Entra a la pagina con http://192.168.4.1/
         wifi_init_softap();
@@ -634,8 +674,6 @@ void tcp_client(void)
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 
-    //Todavia faltaria hacer que el usuario pueda ingressar ssid y password mediante el formulario web
-
     if(wifi_connect() == ESP_OK){
         gpio_reset_pin(33);
         gpio_set_direction(33, GPIO_MODE_INPUT);
@@ -643,9 +681,6 @@ void tcp_client(void)
 
         gpio_reset_pin(2);
         gpio_set_direction(2, GPIO_MODE_OUTPUT);
-
-        //uart_init();
-        //serial_config_init();
         
         char rx_buffer[128];
         int addr_family = 0;
